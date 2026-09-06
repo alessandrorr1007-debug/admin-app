@@ -66,7 +66,7 @@ function estadoAsistencia(pct: number): { label: string; color: string } {
   return { label: 'En riesgo', color: '#DC2626' };
 }
 
-// Algoritmo procesarCursosAsistencia (idéntico a AsistenciaScreen.kt)
+// Algoritmo procesarCursosAsistencia basado exactamente en el Horario del ciclo matriculado
 function procesarCursosAsistencia(
   registros: AsistenciaCurso[],
   horario: HorarioCurso[] = [],
@@ -93,7 +93,199 @@ function procesarCursosAsistencia(
       ? semanasDetectadas.sort((a, b) => a - b)[Math.floor(semanasDetectadas.length / 2)]
       : (semanaActual && semanaActual >= 1 && semanaActual <= 18 ? semanaActual : 4);
 
-  // 2. Agrupar registros por materia / nombre (para fusionar Teoría y Lab)
+  // 2. Si hay horario cargado, la lista de cursos a mostrar proviene DIRECTAMENTE de los cursos que el alumno tiene matriculados en su Horario
+  if (horario.length > 0) {
+    const registrosRestantes = [...registros];
+    const resultado: AsistenciaCurso[] = [];
+
+    for (const cursoH of horario) {
+      const codH = cursoH.codigo_materia ? normalizarNombre(cursoH.codigo_materia) : '';
+      const nomH = normalizarNombre(cursoH.nombre || '');
+      const crnH = cursoH.crn?.trim() || '';
+
+      // Buscar todos los registros de asistencia que coincidan con este curso del horario (Teoría + Laboratorio)
+      const regsCoincidentes: AsistenciaCurso[] = [];
+      for (let i = registrosRestantes.length - 1; i >= 0; i--) {
+        const reg = registrosRestantes[i];
+        const crnR = reg.crn?.trim() || '';
+        const codR = reg.codigo_materia ? normalizarNombre(reg.codigo_materia) : '';
+        const nomR = normalizarNombre(reg.nombre_curso || reg.materia || '');
+
+        const match =
+          (crnH.length > 0 && crnR === crnH) ||
+          (codH.length > 0 && codR === codH) ||
+          nomR === nomH ||
+          (nomH.length > 4 && nomR.includes(nomH)) ||
+          (nomR.length > 4 && nomH.includes(nomR));
+
+        if (match) {
+          regsCoincidentes.unshift(registrosRestantes.splice(i, 1)[0]);
+        }
+      }
+
+      // Días y horarios obtenidos de los bloques del horario de este curso
+      const diasDelHorario = cursoH.bloques
+        ?.map((b) => b.dia_nombre)
+        .filter(Boolean)
+        .filter((d, idx, arr) => arr.indexOf(d) === idx)
+        .join(', ');
+
+      const horasDelHorario = cursoH.bloques
+        ?.map((b) => b.hora_inicio_12h || b.hora_inicio)
+        .filter(Boolean)
+        .join(' / ');
+
+      const aulasDelHorario = cursoH.bloques
+        ?.map((b) => b.aula)
+        .filter(Boolean)
+        .filter((a, idx, arr) => arr.indexOf(a) === idx)
+        .join(' / ');
+
+      const nombreCursoFinal = cursoH.nombre || 'Curso';
+
+      if (regsCoincidentes.length > 0) {
+        // Mapear cada componente de asistencia (Teoría, Lab, Práctica)
+        const componentes: AsistenciaComponente[] = regsCoincidentes.map((reg, index) => {
+          const dias = reg.horario_dias || diasDelHorario;
+          const diasCount = Math.max(1, contarDiasHorario(dias));
+          const clasesEstimadas = semanasValidas * diasCount;
+
+          const tipoClasificado = clasificarTipo(
+            reg.tipo || reg.tipo_componente,
+            reg.seccion,
+            nombreCursoFinal,
+            index,
+            regsCoincidentes.length
+          );
+
+          const f = reg.faltas ?? 0;
+          let asistenciasCalculadas = reg.asistencias ?? reg.veces_asistio;
+          if (asistenciasCalculadas === undefined || asistenciasCalculadas === null) {
+            const p = reg.porcentaje ?? 100;
+            if (p <= 0) asistenciasCalculadas = 0;
+            else if (f > 0 && p < 100) asistenciasCalculadas = Math.max(0, Math.round((p * f) / (100 - p)));
+            else asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+          }
+
+          const totalClasesComp =
+            reg.total_clases && reg.total_clases > 0
+              ? reg.total_clases
+              : Math.max(clasesEstimadas, asistenciasCalculadas + f);
+
+          return {
+            crn: reg.crn || cursoH.crn,
+            seccion: reg.seccion,
+            tipo: tipoClasificado,
+            tipo_componente: tipoClasificado,
+            porcentaje: reg.porcentaje,
+            faltas: f,
+            asistencias: asistenciasCalculadas,
+            veces_asistio: asistenciasCalculadas,
+            total_clases: totalClasesComp,
+            horario_dias: dias,
+            hora: reg.hora || horasDelHorario,
+            hora_12h: reg.hora_12h || horasDelHorario,
+            aula: reg.aula || aulasDelHorario,
+          };
+        });
+
+        const totalFaltasCurso = componentes.reduce((acc, c) => acc + (c.faltas ?? 0), 0);
+        const totalAsistenciasCurso = componentes.reduce(
+          (acc, c) => acc + (c.asistencias ?? c.veces_asistio ?? 0),
+          0
+        );
+        const totalClasesCurso = componentes.reduce((acc, c) => acc + (c.total_clases ?? 0), 0);
+
+        const porcentajeGlobal =
+          totalClasesCurso > 0
+            ? (totalAsistenciasCurso / totalClasesCurso) * 100
+            : componentes.length > 0
+            ? componentes.map((c) => c.porcentaje ?? 100).reduce((a, b) => a + b, 0) / componentes.length
+            : 100;
+
+        const todosLosDias = componentes
+          .map((c) => c.horario_dias)
+          .filter((d): d is string => !!d)
+          .flatMap((d) => d.split(/[,·]/).map((s) => s.trim()))
+          .filter((d, i, arr) => d.length > 0 && arr.indexOf(d) === i)
+          .join(', ');
+
+        const crnConsolidado = componentes
+          .map((c) => c.crn)
+          .filter(Boolean)
+          .filter((c, i, arr) => arr.indexOf(c) === i)
+          .join(' / ');
+
+        const seccionConsolidada = componentes
+          .map((c) => c.seccion)
+          .filter(Boolean)
+          .filter((s, i, arr) => arr.indexOf(s) === i)
+          .join(' / ');
+
+        resultado.push({
+          crn: crnConsolidado || cursoH.crn,
+          materia: nombreCursoFinal,
+          codigo_materia: cursoH.codigo_materia,
+          nombre_curso: nombreCursoFinal,
+          seccion: seccionConsolidada || regsCoincidentes[0].seccion,
+          periodo: regsCoincidentes.find((r) => r.periodo)?.periodo,
+          faltas: totalFaltasCurso,
+          asistencias: totalAsistenciasCurso,
+          veces_asistio: totalAsistenciasCurso,
+          total_clases: totalClasesCurso,
+          porcentaje: porcentajeGlobal,
+          horario_dias: todosLosDias || diasDelHorario,
+          hora: horasDelHorario || regsCoincidentes[0].hora,
+          hora_12h: horasDelHorario || regsCoincidentes[0].hora_12h,
+          aula: aulasDelHorario || regsCoincidentes[0].aula,
+          componentes,
+          total_secciones: componentes.length,
+        });
+      } else {
+        // El curso está en tu horario pero la API de Banner aún no registra inasistencias (100% de asistencia limpia)
+        const diasCount = Math.max(1, contarDiasHorario(diasDelHorario));
+        const clasesEstimadas = semanasValidas * diasCount;
+        resultado.push({
+          crn: cursoH.crn,
+          materia: nombreCursoFinal,
+          codigo_materia: cursoH.codigo_materia,
+          nombre_curso: nombreCursoFinal,
+          seccion: null,
+          periodo: undefined,
+          faltas: 0,
+          asistencias: clasesEstimadas,
+          veces_asistio: clasesEstimadas,
+          total_clases: clasesEstimadas,
+          porcentaje: 100,
+          horario_dias: diasDelHorario,
+          hora: horasDelHorario,
+          hora_12h: horasDelHorario,
+          aula: aulasDelHorario,
+          componentes: [
+            {
+              crn: cursoH.crn,
+              seccion: null,
+              tipo: 'Teoría / General',
+              porcentaje: 100,
+              faltas: 0,
+              asistencias: clasesEstimadas,
+              veces_asistio: clasesEstimadas,
+              total_clases: clasesEstimadas,
+              horario_dias: diasDelHorario,
+              hora: horasDelHorario,
+              hora_12h: horasDelHorario,
+              aula: aulasDelHorario,
+            },
+          ],
+          total_secciones: 1,
+        });
+      }
+    }
+
+    return resultado;
+  }
+
+  // Fallback si por alguna razón el horario viene vacío: procesar los registros agrupando
   const grupos = new Map<string, AsistenciaCurso[]>();
   for (const r of registros) {
     const clave =
@@ -105,26 +297,11 @@ function procesarCursosAsistencia(
     grupos.get(clave)!.push(r);
   }
 
-  const horarioRestante = [...horario];
-  const resultado: AsistenciaCurso[] = [];
-
-  grupos.forEach((listaRegs, clave) => {
-    const hCoincidenteIdx = horarioRestante.findIndex((h) => {
-      const codH = h.codigo_materia ? normalizarNombre(h.codigo_materia) : '';
-      const nomH = normalizarNombre(h.nombre || '');
-      return clave === codH || clave === nomH || nomH.includes(clave) || clave.includes(nomH);
-    });
-
-    let hCoincidente: HorarioCurso | undefined;
-    if (hCoincidenteIdx !== -1) {
-      hCoincidente = horarioRestante.splice(hCoincidenteIdx, 1)[0];
-    }
-
-    const nombreFinal = hCoincidente?.nombre || listaRegs[0].nombre_curso || listaRegs[0].materia || 'Curso';
-    const codMateriaFinal = hCoincidente?.codigo_materia || listaRegs[0].codigo_materia;
-
+  const resultadoFallback: AsistenciaCurso[] = [];
+  grupos.forEach((listaRegs) => {
+    const nombreFinal = listaRegs[0].nombre_curso || listaRegs[0].materia || 'Curso';
     const componentes: AsistenciaComponente[] = listaRegs.map((reg, index) => {
-      const dias = reg.horario_dias || (hCoincidente?.bloques?.map((b) => b.dia_nombre).filter(Boolean).join(', '));
+      const dias = reg.horario_dias || '';
       const diasCount = Math.max(1, contarDiasHorario(dias));
       const clasesEstimadas = semanasValidas * diasCount;
 
@@ -145,11 +322,6 @@ function procesarCursosAsistencia(
         else asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
       }
 
-      const totalClasesComp =
-        reg.total_clases && reg.total_clases > 0
-          ? reg.total_clases
-          : Math.max(clasesEstimadas, asistenciasCalculadas + f);
-
       return {
         crn: reg.crn,
         seccion: reg.seccion,
@@ -159,7 +331,7 @@ function procesarCursosAsistencia(
         faltas: f,
         asistencias: asistenciasCalculadas,
         veces_asistio: asistenciasCalculadas,
-        total_clases: totalClasesComp,
+        total_clases: reg.total_clases || (asistenciasCalculadas + f),
         horario_dias: dias,
         hora: reg.hora,
         hora_12h: reg.hora_12h,
@@ -167,52 +339,23 @@ function procesarCursosAsistencia(
       };
     });
 
-    const totalFaltasCurso = componentes.reduce((acc, c) => acc + (c.faltas ?? 0), 0);
-    const totalAsistenciasCurso = componentes.reduce(
-      (acc, c) => acc + (c.asistencias ?? c.veces_asistio ?? 0),
-      0
-    );
-    const totalClasesCurso = componentes.reduce((acc, c) => acc + (c.total_clases ?? 0), 0);
+    const totalFaltas = componentes.reduce((acc, c) => acc + (c.faltas ?? 0), 0);
+    const totalAsist = componentes.reduce((acc, c) => acc + (c.asistencias ?? 0), 0);
+    const totalClases = componentes.reduce((acc, c) => acc + (c.total_clases ?? 0), 0);
 
-    const porcentajeGlobal =
-      totalClasesCurso > 0
-        ? (totalAsistenciasCurso / totalClasesCurso) * 100
-        : componentes.length > 0
-        ? componentes.map((c) => c.porcentaje ?? 100).reduce((a, b) => a + b, 0) / componentes.length
-        : 100;
-
-    const todosLosDias = componentes
-      .map((c) => c.horario_dias)
-      .filter((d): d is string => !!d)
-      .flatMap((d) => d.split(/[,·]/).map((s) => s.trim()))
-      .filter((d, i, arr) => d.length > 0 && arr.indexOf(d) === i)
-      .join(', ');
-
-    const crnConsolidado = componentes
-      .map((c) => c.crn)
-      .filter(Boolean)
-      .filter((c, i, arr) => arr.indexOf(c) === i)
-      .join(' / ');
-
-    const seccionConsolidada = componentes
-      .map((c) => c.seccion)
-      .filter(Boolean)
-      .filter((s, i, arr) => arr.indexOf(s) === i)
-      .join(' / ');
-
-    resultado.push({
-      crn: crnConsolidado || hCoincidente?.crn || listaRegs[0].crn,
+    resultadoFallback.push({
+      crn: listaRegs[0].crn,
       materia: nombreFinal,
-      codigo_materia: codMateriaFinal,
+      codigo_materia: listaRegs[0].codigo_materia,
       nombre_curso: nombreFinal,
-      seccion: seccionConsolidada || listaRegs[0].seccion,
+      seccion: listaRegs[0].seccion,
       periodo: listaRegs.find((r) => r.periodo)?.periodo,
-      faltas: totalFaltasCurso,
-      asistencias: totalAsistenciasCurso,
-      veces_asistio: totalAsistenciasCurso,
-      total_clases: totalClasesCurso,
-      porcentaje: porcentajeGlobal,
-      horario_dias: todosLosDias || listaRegs[0].horario_dias,
+      faltas: totalFaltas,
+      asistencias: totalAsist,
+      veces_asistio: totalAsist,
+      total_clases: totalClases,
+      porcentaje: totalClases > 0 ? (totalAsist / totalClases) * 100 : 100,
+      horario_dias: listaRegs[0].horario_dias,
       hora: listaRegs[0].hora,
       hora_12h: listaRegs[0].hora_12h,
       aula: listaRegs[0].aula,
@@ -221,28 +364,7 @@ function procesarCursosAsistencia(
     });
   });
 
-  // Si hay cursos del horario del ciclo que aún no registran asistencia, agregarlos
-  for (const h of horarioRestante) {
-    const diasTxt = h.bloques?.map((b) => b.dia_nombre).filter(Boolean).join(', ');
-    resultado.push({
-      crn: h.crn,
-      materia: h.nombre || 'Curso',
-      codigo_materia: h.codigo_materia,
-      nombre_curso: h.nombre || 'Curso',
-      seccion: null,
-      periodo: undefined,
-      faltas: 0,
-      asistencias: 0,
-      veces_asistio: 0,
-      total_clases: 0,
-      porcentaje: null,
-      horario_dias: diasTxt,
-      componentes: [],
-      total_secciones: 0,
-    });
-  }
-
-  return resultado;
+  return resultadoFallback;
 }
 
 export const AsistenciaView: React.FC = () => {
