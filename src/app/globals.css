@@ -1,26 +1,53 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f8fc;
+  --foreground: #111827;
+  --card-bg: #ffffff;
+  --card-border: #e2e8f0;
+  --muted: #64748b;
+  --upao-blue: #1e56d8;
+  --upao-blue-dark: #0c2766;
+  --upao-blue-light: #7ba5ff;
+  --upao-amber: #e69500;
+  --upao-green: #16a34a;
+  --upao-red: #dc2626;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0d1117;
+  --foreground: #f1f5f9;
+  --card-bg: #161b26;
+  --card-border: #232d3f;
+  --muted: #94a3b8;
+  --upao-blue: #3b82f6;
+  --upao-blue-dark: #1e3a8a;
+  --upao-blue-light: #93c5fd;
+  --upao-amber: #f59e0b;
+  --upao-green: #22c55e;
+  --upao-red: #ef4444;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
 }
