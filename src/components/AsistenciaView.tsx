@@ -55,6 +55,56 @@ function normalizarNombre(nombre: string): string {
     .trim();
 }
 
+function limpiarNombreCurso(nombre: string): string {
+  return sinAcentos(nombre)
+    .replace(/^[A-Z]{2,6}[-\s]?\d{0,4}\s*/i, '')
+    .replace(/[^A-Z0-9\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cursoCoincideConHorario(reg: AsistenciaCurso, cursoH: HorarioCurso): boolean {
+  const crnR = reg.crn?.trim() || '';
+  const crnH = cursoH.crn?.trim() || '';
+
+  // 1. Coincidencia directa por CRN
+  if (crnR && crnH && crnR === crnH) return true;
+
+  // 2. Coincidencia por código de materia COMPLETO con número (ej: ISIA 109 vs ISIA 109 ó ISIA-109)
+  const numH = cursoH.numero_curso?.trim() || '';
+  const codH = (cursoH.codigo_materia || '').trim().toUpperCase();
+  const codCompletoH = (codH + numH).replace(/[^A-Z0-9]/g, '');
+
+  const codR = (reg.codigo_materia || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const tieneDigitoH = /\d/.test(codCompletoH);
+  const tieneDigitoR = /\d/.test(codR);
+  if (tieneDigitoH && tieneDigitoR && codCompletoH === codR) {
+    return true;
+  }
+
+  // 3. Coincidencia por Nombre de Curso
+  const nomR = normalizarNombre(reg.nombre_curso || reg.materia || '');
+  const nomH = normalizarNombre(cursoH.nombre || '');
+  if (!nomR || !nomH) return false;
+
+  if (nomR === nomH) return true;
+
+  const limpioR = limpiarNombreCurso(nomR);
+  const limpioH = limpiarNombreCurso(nomH);
+
+  if (limpioR && limpioH) {
+    if (limpioR === limpioH) return true;
+    if (limpioR.length >= 6 && limpioH.length >= 6) {
+      if (limpioR.includes(limpioH) || limpioH.includes(limpioR)) return true;
+    }
+  }
+
+  if (limpioH.length >= 6 && nomR.includes(limpioH)) return true;
+  if (limpioR.length >= 6 && nomH.includes(limpioR)) return true;
+
+  return false;
+}
+
 function formatPct(pct: number): string {
   const r = Math.round(pct * 10) / 10;
   return r % 1 === 0 ? r.toString() : r.toFixed(1);
@@ -99,26 +149,11 @@ function procesarCursosAsistencia(
     const resultado: AsistenciaCurso[] = [];
 
     for (const cursoH of horario) {
-      const codH = cursoH.codigo_materia ? normalizarNombre(cursoH.codigo_materia) : '';
-      const nomH = normalizarNombre(cursoH.nombre || '');
-      const crnH = cursoH.crn?.trim() || '';
-
       // Buscar todos los registros de asistencia que coincidan con este curso del horario (Teoría + Laboratorio)
       const regsCoincidentes: AsistenciaCurso[] = [];
       for (let i = registrosRestantes.length - 1; i >= 0; i--) {
         const reg = registrosRestantes[i];
-        const crnR = reg.crn?.trim() || '';
-        const codR = reg.codigo_materia ? normalizarNombre(reg.codigo_materia) : '';
-        const nomR = normalizarNombre(reg.nombre_curso || reg.materia || '');
-
-        const match =
-          (crnH.length > 0 && crnR === crnH) ||
-          (codH.length > 0 && codR === codH) ||
-          nomR === nomH ||
-          (nomH.length > 4 && nomR.includes(nomH)) ||
-          (nomR.length > 4 && nomH.includes(nomR));
-
-        if (match) {
+        if (cursoCoincideConHorario(reg, cursoH)) {
           regsCoincidentes.unshift(registrosRestantes.splice(i, 1)[0]);
         }
       }
@@ -144,6 +179,14 @@ function procesarCursosAsistencia(
       const nombreCursoFinal = cursoH.nombre || 'Curso';
 
       if (regsCoincidentes.length > 0) {
+        // Ordenar componentes para que Teoría aparezca primero, luego Práctica, luego Laboratorio
+        regsCoincidentes.sort((a, b) => {
+          const tipoA = (a.tipo || a.tipo_componente || '').toUpperCase();
+          const tipoB = (b.tipo || b.tipo_componente || '').toUpperCase();
+          const rank = (t: string) => (t.includes('TEOR') ? 1 : t.includes('PRAC') ? 2 : 3);
+          return rank(tipoA) - rank(tipoB);
+        });
+
         // Mapear cada componente de asistencia (Teoría, Lab, Práctica)
         const componentes: AsistenciaComponente[] = regsCoincidentes.map((reg, index) => {
           const dias = reg.horario_dias || diasDelHorario;
@@ -161,31 +204,52 @@ function procesarCursosAsistencia(
           const f = reg.faltas ?? 0;
           let asistenciasCalculadas = reg.asistencias ?? reg.veces_asistio;
           if (asistenciasCalculadas === undefined || asistenciasCalculadas === null) {
-            const p = reg.porcentaje ?? 100;
-            if (p <= 0) asistenciasCalculadas = 0;
-            else if (f > 0 && p < 100) asistenciasCalculadas = Math.max(0, Math.round((p * f) / (100 - p)));
-            else asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+            const p = reg.porcentaje;
+            if (p !== undefined && p !== null) {
+              if (p <= 0) {
+                asistenciasCalculadas = 0;
+              } else if (f > 0 && p < 100) {
+                asistenciasCalculadas = Math.max(0, Math.round((p * f) / (100 - p)));
+              } else {
+                asistenciasCalculadas = Math.max(1, (reg.total_clases && reg.total_clases > 0 ? reg.total_clases : clasesEstimadas) - f);
+              }
+            } else {
+              asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+            }
           }
 
           const totalClasesComp =
             reg.total_clases && reg.total_clases > 0
               ? reg.total_clases
-              : Math.max(clasesEstimadas, asistenciasCalculadas + f);
+              : asistenciasCalculadas + f > 0
+              ? asistenciasCalculadas + f
+              : clasesEstimadas;
+
+          const compPorcentaje =
+            reg.porcentaje !== undefined && reg.porcentaje !== null
+              ? reg.porcentaje
+              : totalClasesComp > 0
+              ? Math.round((asistenciasCalculadas / totalClasesComp) * 100)
+              : 100;
+
+          const bloqueCorrespondiente = cursoH.bloques && cursoH.bloques[index];
+          const horaComp = reg.hora_12h || reg.hora || (bloqueCorrespondiente ? (bloqueCorrespondiente.hora_inicio_12h || bloqueCorrespondiente.hora_inicio) : horasDelHorario);
+          const aulaComp = reg.aula || bloqueCorrespondiente?.aula || aulasDelHorario;
 
           return {
             crn: reg.crn || cursoH.crn,
             seccion: reg.seccion,
             tipo: tipoClasificado,
             tipo_componente: tipoClasificado,
-            porcentaje: reg.porcentaje,
+            porcentaje: compPorcentaje,
             faltas: f,
             asistencias: asistenciasCalculadas,
             veces_asistio: asistenciasCalculadas,
             total_clases: totalClasesComp,
             horario_dias: dias,
-            hora: reg.hora || horasDelHorario,
-            hora_12h: reg.hora_12h || horasDelHorario,
-            aula: reg.aula || aulasDelHorario,
+            hora: horaComp,
+            hora_12h: horaComp,
+            aula: aulaComp,
           };
         });
 
@@ -198,9 +262,9 @@ function procesarCursosAsistencia(
 
         const porcentajeGlobal =
           totalClasesCurso > 0
-            ? (totalAsistenciasCurso / totalClasesCurso) * 100
+            ? Math.round(((totalAsistenciasCurso / totalClasesCurso) * 100) * 10) / 10
             : componentes.length > 0
-            ? componentes.map((c) => c.porcentaje ?? 100).reduce((a, b) => a + b, 0) / componentes.length
+            ? Math.round((componentes.reduce((acc, c) => acc + (c.porcentaje ?? 100), 0) / componentes.length) * 10) / 10
             : 100;
 
         const todosLosDias = componentes
@@ -282,16 +346,95 @@ function procesarCursosAsistencia(
       }
     }
 
+    // 3. Si quedaron registros en Banner que no coincidieron con el horario, agregarlos para no perder información
+    if (registrosRestantes.length > 0) {
+      const gruposSobran = new Map<string, AsistenciaCurso[]>();
+      for (const r of registrosRestantes) {
+        const nom = normalizarNombre(r.nombre_curso || r.materia || 'Curso');
+        const nomLimpio = limpiarNombreCurso(nom) || nom;
+        const clave = nomLimpio.length >= 4 ? nomLimpio : (r.crn || nom);
+        if (!gruposSobran.has(clave)) gruposSobran.set(clave, []);
+        gruposSobran.get(clave)!.push(r);
+      }
+
+      gruposSobran.forEach((listaRegs) => {
+        const nombreFinal = listaRegs[0].nombre_curso || listaRegs[0].materia || 'Curso';
+        const comps: AsistenciaComponente[] = listaRegs.map((reg, index) => {
+          const dias = reg.horario_dias || '';
+          const diasCount = Math.max(1, contarDiasHorario(dias));
+          const clasesEstimadas = semanasValidas * diasCount;
+          const tipoClasificado = clasificarTipo(
+            reg.tipo || reg.tipo_componente,
+            reg.seccion,
+            nombreFinal,
+            index,
+            listaRegs.length
+          );
+          const f = reg.faltas ?? 0;
+          let asist = reg.asistencias ?? reg.veces_asistio;
+          if (asist === undefined || asist === null) {
+            const p = reg.porcentaje;
+            if (p !== undefined && p !== null) {
+              if (p <= 0) asist = 0;
+              else if (f > 0 && p < 100) asist = Math.max(0, Math.round((p * f) / (100 - p)));
+              else asist = Math.max(1, clasesEstimadas - f);
+            } else {
+              asist = Math.max(1, clasesEstimadas - f);
+            }
+          }
+          const tot = reg.total_clases && reg.total_clases > 0 ? reg.total_clases : asist + f;
+          return {
+            crn: reg.crn,
+            seccion: reg.seccion,
+            tipo: tipoClasificado,
+            tipo_componente: tipoClasificado,
+            porcentaje: reg.porcentaje ?? (tot > 0 ? Math.round((asist / tot) * 100) : 100),
+            faltas: f,
+            asistencias: asist,
+            veces_asistio: asist,
+            total_clases: tot,
+            horario_dias: dias,
+            hora: reg.hora,
+            hora_12h: reg.hora_12h,
+            aula: reg.aula,
+          };
+        });
+
+        const totF = comps.reduce((acc, c) => acc + (c.faltas ?? 0), 0);
+        const totA = comps.reduce((acc, c) => acc + (c.asistencias ?? 0), 0);
+        const totC = comps.reduce((acc, c) => acc + (c.total_clases ?? 0), 0);
+
+        resultado.push({
+          crn: comps.map((c) => c.crn).filter(Boolean).filter((c, i, a) => a.indexOf(c) === i).join(' / ') || listaRegs[0].crn,
+          materia: nombreFinal,
+          codigo_materia: listaRegs[0].codigo_materia,
+          nombre_curso: nombreFinal,
+          seccion: comps.map((c) => c.seccion).filter(Boolean).filter((s, i, a) => a.indexOf(s) === i).join(' / ') || listaRegs[0].seccion,
+          periodo: listaRegs.find((r) => r.periodo)?.periodo,
+          faltas: totF,
+          asistencias: totA,
+          veces_asistio: totA,
+          total_clases: totC,
+          porcentaje: totC > 0 ? Math.round((totA / totC) * 100) : 100,
+          horario_dias: listaRegs[0].horario_dias,
+          hora: listaRegs[0].hora,
+          hora_12h: listaRegs[0].hora_12h,
+          aula: listaRegs[0].aula,
+          componentes: comps,
+          total_secciones: comps.length,
+        });
+      });
+    }
+
     return resultado;
   }
 
   // Fallback si por alguna razón el horario viene vacío: procesar los registros agrupando
   const grupos = new Map<string, AsistenciaCurso[]>();
   for (const r of registros) {
-    const clave =
-      r.codigo_materia && r.codigo_materia.trim().length > 0
-        ? normalizarNombre(r.codigo_materia)
-        : normalizarNombre(r.nombre_curso || r.materia || 'Curso');
+    const nom = normalizarNombre(r.nombre_curso || r.materia || 'Curso');
+    const nomLimpio = limpiarNombreCurso(nom) || nom;
+    const clave = nomLimpio.length >= 4 ? nomLimpio : (r.crn || nom);
 
     if (!grupos.has(clave)) grupos.set(clave, []);
     grupos.get(clave)!.push(r);
@@ -316,22 +459,28 @@ function procesarCursosAsistencia(
       const f = reg.faltas ?? 0;
       let asistenciasCalculadas = reg.asistencias ?? reg.veces_asistio;
       if (asistenciasCalculadas === undefined || asistenciasCalculadas === null) {
-        const p = reg.porcentaje ?? 100;
-        if (p <= 0) asistenciasCalculadas = 0;
-        else if (f > 0 && p < 100) asistenciasCalculadas = Math.max(0, Math.round((p * f) / (100 - p)));
-        else asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+        const p = reg.porcentaje;
+        if (p !== undefined && p !== null) {
+          if (p <= 0) asistenciasCalculadas = 0;
+          else if (f > 0 && p < 100) asistenciasCalculadas = Math.max(0, Math.round((p * f) / (100 - p)));
+          else asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+        } else {
+          asistenciasCalculadas = Math.max(1, clasesEstimadas - f);
+        }
       }
+
+      const tot = reg.total_clases && reg.total_clases > 0 ? reg.total_clases : asistenciasCalculadas + f;
 
       return {
         crn: reg.crn,
         seccion: reg.seccion,
         tipo: tipoClasificado,
         tipo_componente: tipoClasificado,
-        porcentaje: reg.porcentaje,
+        porcentaje: reg.porcentaje ?? (tot > 0 ? Math.round((asistenciasCalculadas / tot) * 100) : 100),
         faltas: f,
         asistencias: asistenciasCalculadas,
         veces_asistio: asistenciasCalculadas,
-        total_clases: reg.total_clases || (asistenciasCalculadas + f),
+        total_clases: tot,
         horario_dias: dias,
         hora: reg.hora,
         hora_12h: reg.hora_12h,
@@ -354,7 +503,7 @@ function procesarCursosAsistencia(
       asistencias: totalAsist,
       veces_asistio: totalAsist,
       total_clases: totalClases,
-      porcentaje: totalClases > 0 ? (totalAsist / totalClases) * 100 : 100,
+      porcentaje: totalClases > 0 ? Math.round((totalAsist / totalClases) * 100) : 100,
       horario_dias: listaRegs[0].horario_dias,
       hora: listaRegs[0].hora,
       hora_12h: listaRegs[0].hora_12h,
@@ -484,25 +633,12 @@ export const AsistenciaView: React.FC = () => {
     let registrosFiltrados = rawAsistencia;
 
     if (selectedPeriodo !== 'TODOS') {
-      // 1. Filtrar los que tengan explícitamente el periodo
-      // 2. Si el periodo del registro viene vacío o nulo, verificar si coincide con los cursos del horario de este periodo
-      const crnsHorario = new Set(horarioCursos.map((h) => h.crn?.trim()).filter(Boolean));
-      const codsHorario = new Set(horarioCursos.map((h) => normalizarNombre(h.codigo_materia || '')).filter(Boolean));
-      const nombresHorario = new Set(horarioCursos.map((h) => normalizarNombre(h.nombre || '')).filter(Boolean));
-
       registrosFiltrados = rawAsistencia.filter((r) => {
         if (r.periodo) {
           return r.periodo.trim() === selectedPeriodo.trim();
         }
-        // Fallback si la API de Banner omite el campo periodo: coincide con el horario del ciclo actual
-        const rCrn = r.crn?.trim();
-        if (rCrn && crnsHorario.has(rCrn)) return true;
-        const rCod = r.codigo_materia ? normalizarNombre(r.codigo_materia) : '';
-        if (rCod && codsHorario.has(rCod)) return true;
-        const rNom = normalizarNombre(r.nombre_curso || r.materia || '');
-        if (rNom && nombresHorario.has(rNom)) return true;
-
-        return false;
+        // Fallback si la API de Banner omite el campo periodo: coincide con algún curso del horario del ciclo actual
+        return horarioCursos.some((h) => cursoCoincideConHorario(r, h));
       });
 
       // Si todos los registros de Banner venían sin periodo y el filtro quedó vacío, mostrar rawAsistencia
