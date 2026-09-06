@@ -454,7 +454,23 @@ export const AsistenciaView: React.FC = () => {
     };
 
     init();
-  }, [isAuthenticated, aplicarCache, loadData]);
+
+    // Auto-actualización cuando el usuario regresa a la pestaña o ventana del navegador (focus)
+    const onFocus = () => {
+      loadData(selectedPeriodo);
+    };
+    window.addEventListener('focus', onFocus);
+
+    // Auto-actualización periódica de fondo (cada 60 segundos)
+    const interval = setInterval(() => {
+      loadData(selectedPeriodo);
+    }, 60000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, aplicarCache, loadData, selectedPeriodo]);
 
   const handlePeriodoChange = (nuevoPeriodo: string) => {
     setSelectedPeriodo(nuevoPeriodo);
