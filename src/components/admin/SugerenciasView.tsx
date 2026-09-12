@@ -72,7 +72,7 @@ export function SugerenciasView({ onPendingCountChange }: SugerenciasViewProps) 
 
   const pendientesCount = sugerencias.filter((s) => s.estado === 'pendiente').length;
 
-  const getStatusBadge = (estado: SugerenciaEstado) => {
+  const getStatusBadge = (estado: string) => {
     switch (estado) {
       case 'pendiente':
         return (
@@ -82,24 +82,28 @@ export function SugerenciasView({ onPendingCountChange }: SugerenciasViewProps) 
           </span>
         );
       case 'visto':
+      case 'en_revision':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/30">
             <Eye className="w-3 h-3" />
-            <span>Visto</span>
+            <span>En Revisión</span>
           </span>
         );
       case 'resuelto':
+      case 'aprobada':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
             <CheckCircle className="w-3 h-3" />
-            <span>Resuelto</span>
+            <span>Aprobada</span>
           </span>
         );
       case 'descartado':
+      case 'rechazada':
+      default:
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
             <XCircle className="w-3 h-3" />
-            <span>Descartado</span>
+            <span>{estado === 'rechazada' ? 'Rechazada' : 'Descartado'}</span>
           </span>
         );
     }
@@ -223,16 +227,18 @@ export function SugerenciasView({ onPendingCountChange }: SugerenciasViewProps) 
                     </div>
                     <div>
                       <span className="font-mono text-xs font-semibold text-white">
-                        Estudiante: {sug.usuario_banner}
+                        Estudiante: {sug.usuario_banner || sug.usuario || 'Anónimo'}
                       </span>
                       <p className="text-[11px] text-slate-400">
-                        {new Date(sug.fecha).toLocaleString('es-PE', {
-                          day: '2-digit',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        {sug.fecha || sug.fecha_creacion
+                          ? new Date(sug.fecha || sug.fecha_creacion!).toLocaleString('es-PE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : 'Fecha no disponible'}
                       </p>
                     </div>
                   </div>

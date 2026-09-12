@@ -38,11 +38,20 @@ export function CuentasView() {
     fetchCuentas();
   }, []);
 
+  const getUsuarioId = (c: AdminCuenta): string => {
+    return c.usuario_campus || c.usuario || '';
+  };
+
+  const getUltimaActividad = (c: AdminCuenta): string | null => {
+    return c.ultimo_login || c.ultima_revision || null;
+  };
+
   const filteredCuentas = useMemo(() => {
     return cuentas.filter((c) => {
       const query = searchQuery.toLowerCase();
+      const userId = getUsuarioId(c).toLowerCase();
       const matchesSearch =
-        c.usuario_campus.toLowerCase().includes(query) ||
+        userId.includes(query) ||
         (c.nombre && c.nombre.toLowerCase().includes(query));
 
       if (!matchesSearch) return false;
@@ -162,38 +171,42 @@ export function CuentasView() {
                   </td>
                 </tr>
               ) : (
-                filteredCuentas.map((cuenta) => (
-                  <tr key={cuenta.usuario_campus} className="hover:bg-slate-800/40 transition-colors">
-                    <td className="px-6 py-4 font-mono font-semibold text-white">
-                      {cuenta.usuario_campus}
-                    </td>
-                    <td className="px-6 py-4">
-                      {cuenta.nombre ? (
-                        <span className="font-medium text-slate-200">{cuenta.nombre}</span>
-                      ) : (
-                        <span className="text-slate-400 italic">No registrado</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">
-                      {cuenta.fecha_primer_login
-                        ? new Date(cuenta.fecha_primer_login).toLocaleDateString('es-PE', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-slate-400">
-                      {cuenta.ultimo_login
-                        ? new Date(cuenta.ultimo_login).toLocaleDateString('es-PE', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })
-                        : '—'}
-                    </td>
-                    <td className="px-6 py-4 text-center">
+                filteredCuentas.map((cuenta, idx) => {
+                  const uid = getUsuarioId(cuenta);
+                  const lastAct = getUltimaActividad(cuenta);
+
+                  return (
+                    <tr key={uid || idx} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="px-6 py-4 font-mono font-semibold text-white">
+                        {uid || '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        {cuenta.nombre ? (
+                          <span className="font-medium text-slate-200">{cuenta.nombre}</span>
+                        ) : (
+                          <span className="text-slate-400 italic">No registrado</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-400">
+                        {cuenta.fecha_primer_login
+                          ? new Date(cuenta.fecha_primer_login).toLocaleDateString('es-PE', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-slate-400">
+                        {lastAct
+                          ? new Date(lastAct).toLocaleDateString('es-PE', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-center">
                       {cuenta.auto_check_enabled ? (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
                           <CheckCircle2 className="w-3 h-3" />

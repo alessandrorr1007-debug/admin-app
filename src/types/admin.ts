@@ -22,13 +22,16 @@ export interface MetricasResponse {
 }
 
 export interface AdminCuenta {
-  usuario_campus: string;
+  usuario?: string;
+  usuario_campus?: string;
   nombre: string | null;
   fecha_primer_login: string | null;
-  ultimo_login: string | null;
+  ultimo_login?: string | null;
+  ultima_revision?: string | null;
   auto_check_enabled: boolean;
   ranking_optin: boolean;
   is_admin: boolean;
+  tiene_password_guardada?: boolean;
 }
 
 export interface AdminCuentasResponse {
