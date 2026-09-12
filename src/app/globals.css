@@ -1,53 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f8fc;
-  --foreground: #111827;
-  --card-bg: #ffffff;
-  --card-border: #e2e8f0;
-  --muted: #64748b;
-  --upao-blue: #1e56d8;
-  --upao-blue-dark: #0c2766;
-  --upao-blue-light: #7ba5ff;
-  --upao-amber: #e69500;
-  --upao-green: #16a34a;
-  --upao-red: #dc2626;
-}
-
-.dark {
-  --background: #0d1117;
-  --foreground: #f1f5f9;
-  --card-bg: #161b26;
-  --card-border: #232d3f;
-  --muted: #94a3b8;
-  --upao-blue: #3b82f6;
-  --upao-blue-dark: #1e3a8a;
-  --upao-blue-light: #93c5fd;
-  --upao-amber: #f59e0b;
-  --upao-green: #22c55e;
-  --upao-red: #ef4444;
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: #07090e;
+  background-image: 
+    radial-gradient(circle 800px at 50% -100px, rgba(99, 102, 241, 0.14), transparent 75%),
+    radial-gradient(circle 600px at 90% 10%, rgba(168, 85, 247, 0.08), transparent 70%),
+    radial-gradient(circle 500px at 10% 90%, rgba(56, 189, 248, 0.04), transparent 60%);
+  background-attachment: fixed;
+  color: #f1f5f9;
   min-height: 100vh;
-  transition: background-color 0.2s ease, color 0.2s ease;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
 }
 
-/* Custom scrollbar */
+/* Glassmorphic bespoke card system */
+.glass-panel {
+  background: rgba(13, 17, 26, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+.glass-panel-interactive {
+  background: rgba(13, 17, 26, 0.68);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.04);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel-interactive:hover {
+  background: rgba(18, 23, 35, 0.85);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.6), 0 0 24px rgba(99, 102, 241, 0.12);
+  transform: translateY(-1.5px);
+}
+
+/* Custom modern scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 9999px;
 }
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }

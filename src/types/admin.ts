@@ -38,13 +38,22 @@ export interface AdminCuentasResponse {
   cuentas: AdminCuenta[];
 }
 
-export type SugerenciaEstado = 'pendiente' | 'visto' | 'resuelto' | 'descartado';
+export type SugerenciaEstado =
+  | 'pendiente'
+  | 'visto'
+  | 'resuelto'
+  | 'descartado'
+  | 'en_revision'
+  | 'aprobada'
+  | 'rechazada';
 
 export interface AdminSugerencia {
   id: number;
-  usuario_banner: string;
+  usuario_banner?: string;
+  usuario?: string;
   texto: string;
-  fecha: string;
+  fecha?: string;
+  fecha_creacion?: string;
   estado: SugerenciaEstado;
 }
 
