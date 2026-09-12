@@ -4,15 +4,13 @@ import React, { useState } from 'react';
 import { useAdminAuth } from '@/lib/admin-auth-context';
 import { AdminLoginView } from '@/components/admin/AdminLoginView';
 import { AdminSidebar, AdminTab } from '@/components/admin/AdminSidebar';
-import { MetricsView } from '@/components/admin/MetricsView';
 import { CuentasView } from '@/components/admin/CuentasView';
 import { SugerenciasView } from '@/components/admin/SugerenciasView';
-import { SemanaView } from '@/components/admin/SemanaView';
-import { Loader2, Menu, X } from 'lucide-react';
+import { Loader2, Menu, X, Shield, Sparkles, Activity } from 'lucide-react';
 
 export default function AdminPage() {
-  const { isAuthenticated, isLoading } = useAdminAuth();
-  const [activeTab, setActiveTab] = useState<AdminTab>('metricas');
+  const { isAuthenticated, isLoading, adminUser } = useAdminAuth();
+  const [activeTab, setActiveTab] = useState<AdminTab>('cuentas');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pendingSuggestionsCount, setPendingSuggestionsCount] = useState(0);
 
@@ -32,7 +30,7 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-950 text-slate-100 antialiased">
+    <div className="min-h-screen flex bg-slate-950 text-slate-100 antialiased selection:bg-indigo-500/30">
       {/* Sidebar para desktop */}
       <div className="hidden lg:flex">
         <AdminSidebar
@@ -46,10 +44,10 @@ export default function AdminPage() {
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
             onClick={() => setIsMobileMenuOpen(false)}
           />
-          <div className="relative z-50 flex flex-col w-64 bg-slate-900 h-full">
+          <div className="relative z-50 flex flex-col w-64 bg-slate-900 h-full shadow-2xl">
             <div className="flex items-center justify-between p-4 border-b border-slate-800">
               <span className="text-sm font-bold text-white">Menú Admin</span>
               <button
@@ -76,7 +74,7 @@ export default function AdminPage() {
       {/* Contenido Principal */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Barra superior móvil */}
-        <header className="lg:hidden h-16 border-b border-slate-800 bg-slate-900/80 px-4 flex items-center justify-between">
+        <header className="lg:hidden h-16 border-b border-slate-800 bg-slate-900/90 px-4 flex items-center justify-between backdrop-blur-md">
           <button
             onClick={() => setIsMobileMenuOpen(true)}
             className="p-2 rounded-xl text-slate-300 hover:bg-slate-800"
@@ -87,13 +85,36 @@ export default function AdminPage() {
           <div className="w-8" />
         </header>
 
+        {/* Topbar para desktop con status */}
+        <header className="hidden lg:flex h-14 border-b border-slate-800/80 bg-slate-950/80 px-8 items-center justify-between backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs font-semibold text-slate-400">
+              Sistema Operativo • Conectado a Servidor UPAOS
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="px-3 py-1 rounded-full bg-slate-900 border border-slate-800 text-[11px] font-mono text-slate-300 flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Sesión: {adminUser?.usuario || '000000000'}</span>
+            </div>
+            <span className="text-xs text-slate-500">
+              {new Date().toLocaleDateString('es-PE', {
+                weekday: 'short',
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </span>
+          </div>
+        </header>
+
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {activeTab === 'metricas' && <MetricsView />}
           {activeTab === 'cuentas' && <CuentasView />}
           {activeTab === 'sugerencias' && (
             <SugerenciasView onPendingCountChange={setPendingSuggestionsCount} />
           )}
-          {activeTab === 'semana' && <SemanaView />}
         </main>
       </div>
     </div>

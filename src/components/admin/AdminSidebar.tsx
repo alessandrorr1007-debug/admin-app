@@ -2,16 +2,15 @@
 
 import React from 'react';
 import {
-  BarChart3,
   Users,
   MessageSquare,
-  Calendar,
   LogOut,
   ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 import { useAdminAuth } from '@/lib/admin-auth-context';
 
-export type AdminTab = 'metricas' | 'cuentas' | 'sugerencias' | 'semana';
+export type AdminTab = 'cuentas' | 'sugerencias';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -30,29 +29,18 @@ export function AdminSidebar({
 
   const navItems = [
     {
-      id: 'metricas' as AdminTab,
-      label: 'Métricas & DAU',
-      icon: BarChart3,
-      badge: null,
-    },
-    {
       id: 'cuentas' as AdminTab,
-      label: 'Cuentas Registradas',
+      label: 'Cuentas & Historial',
       icon: Users,
       badge: totalCuentasCount > 0 ? totalCuentasCount : null,
+      badgeVariant: 'default',
     },
     {
       id: 'sugerencias' as AdminTab,
-      label: 'Buzón Sugerencias',
+      label: 'Buzón de Alumnos',
       icon: MessageSquare,
       badge: pendingSuggestionsCount > 0 ? pendingSuggestionsCount : null,
       badgeVariant: 'warning',
-    },
-    {
-      id: 'semana' as AdminTab,
-      label: 'Semana Académica',
-      icon: Calendar,
-      badge: null,
     },
   ];
 
