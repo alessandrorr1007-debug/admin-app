@@ -19,6 +19,14 @@ import {
   SugerenciaRequest,
   SugerenciaResponse,
 } from '@/types/features';
+import {
+  AdminLoginResponse,
+  AdminCuentasResponse,
+  AdminSugerenciasResponse,
+  MetricasResponse,
+  AdminSemanaResponse,
+  SugerenciaEstado,
+} from '@/types/admin';
 
 const BASE_URL = typeof window !== 'undefined' ? '/api/proxy' : 'https://upaos.onrender.com';
 
@@ -153,6 +161,53 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(data),
     });
+  }
+
+  // --- PANEL ADMINISTRATIVO (000000000 / Paul2002) ---
+  async adminLogin(usuario: string, password: string): Promise<AdminLoginResponse> {
+    return this.request<AdminLoginResponse>('admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ usuario, password }),
+    });
+  }
+
+  async getAdminMetricas(adminUsuario: string = '000000000'): Promise<MetricasResponse> {
+    return this.request<MetricasResponse>(`admin/metricas?admin_usuario=${encodeURIComponent(adminUsuario)}`);
+  }
+
+  async getAdminCuentas(adminUsuario: string = '000000000'): Promise<AdminCuentasResponse> {
+    return this.request<AdminCuentasResponse>(`admin/cuentas?admin_usuario=${encodeURIComponent(adminUsuario)}`);
+  }
+
+  async getAdminSugerencias(adminUsuario: string = '000000000'): Promise<AdminSugerenciasResponse> {
+    return this.request<AdminSugerenciasResponse>(`admin/sugerencias?admin_usuario=${encodeURIComponent(adminUsuario)}`);
+  }
+
+  async patchEstadoSugerencia(
+    sugerenciaId: number,
+    estado: SugerenciaEstado,
+    adminUsuario: string = '000000000'
+  ): Promise<{ message: string; id: number; estado: string }> {
+    return this.request<{ message: string; id: number; estado: string }>(
+      `admin/sugerencias/${sugerenciaId}/estado?admin_usuario=${encodeURIComponent(adminUsuario)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ estado }),
+      }
+    );
+  }
+
+  async postAdminSemana(
+    fechaInicio: string,
+    adminUsuario: string = '000000000'
+  ): Promise<AdminSemanaResponse> {
+    return this.request<AdminSemanaResponse>(
+      `admin/semana?admin_usuario=${encodeURIComponent(adminUsuario)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ fecha_inicio: fechaInicio }),
+      }
+    );
   }
 }
 
