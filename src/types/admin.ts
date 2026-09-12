@@ -9,11 +9,16 @@ export interface DauPunto {
   activos: number;
 }
 
+export interface PicoMetrica {
+  fecha_hora?: string;
+  usuarios_simultaneos: number;
+}
+
 export interface MetricasResponse {
   dau_30_dias: DauPunto[];
   cuentas_activas_hoy: number;
-  pico_hoy: number;
-  pico_historico: number;
+  pico_hoy: number | PicoMetrica | null;
+  pico_historico: number | PicoMetrica | null;
 }
 
 export interface AdminCuenta {

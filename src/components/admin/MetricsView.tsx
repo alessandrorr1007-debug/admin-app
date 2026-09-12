@@ -36,6 +36,19 @@ export function MetricsView() {
     fetchMetricas();
   }, []);
 
+  const getPicoValue = (pico: number | { fecha_hora?: string; usuarios_simultaneos: number } | null | undefined): number => {
+    if (!pico) return 0;
+    if (typeof pico === 'number') return pico;
+    return pico.usuarios_simultaneos ?? 0;
+  };
+
+  const getPicoFecha = (pico: number | { fecha_hora?: string; usuarios_simultaneos: number } | null | undefined): string | null => {
+    if (pico && typeof pico === 'object' && pico.fecha_hora) {
+      return pico.fecha_hora;
+    }
+    return null;
+  };
+
   const maxDau = metricas?.dau_30_dias?.length
     ? Math.max(...metricas.dau_30_dias.map((d) => d.activos), 1)
     : 1;
@@ -100,9 +113,13 @@ export function MetricsView() {
           </div>
           <div className="mt-4">
             <span className="text-3xl font-bold text-white tracking-tight">
-              {isLoading ? '...' : metricas?.pico_hoy ?? 0}
+              {isLoading ? '...' : getPicoValue(metricas?.pico_hoy)}
             </span>
-            <p className="text-xs text-slate-400 mt-1">Máxima concurrencia del día</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {getPicoFecha(metricas?.pico_hoy)
+                ? `Hora: ${getPicoFecha(metricas?.pico_hoy)}`
+                : 'Máxima concurrencia del día'}
+            </p>
           </div>
         </div>
 
@@ -117,9 +134,13 @@ export function MetricsView() {
           </div>
           <div className="mt-4">
             <span className="text-3xl font-bold text-white tracking-tight">
-              {isLoading ? '...' : metricas?.pico_historico ?? 0}
+              {isLoading ? '...' : getPicoValue(metricas?.pico_historico)}
             </span>
-            <p className="text-xs text-slate-400 mt-1">Récord histórico registrado</p>
+            <p className="text-xs text-slate-400 mt-1">
+              {getPicoFecha(metricas?.pico_historico)
+                ? `Registrado: ${getPicoFecha(metricas?.pico_historico)}`
+                : 'Récord histórico registrado'}
+            </p>
           </div>
         </div>
       </div>
