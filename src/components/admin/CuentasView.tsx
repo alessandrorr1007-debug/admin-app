@@ -244,8 +244,8 @@ export function CuentasView() {
                       )}
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              }))}
             </tbody>
           </table>
         </div>
